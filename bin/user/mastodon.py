@@ -135,7 +135,7 @@ from weeutil.weeutil import to_bool
 import requests
 import json
 
-VERSION = "0.02"
+VERSION = "0.01"
 
 if weewx.__version__ < "3":
     raise weewx.UnsupportedFeature("weewx 3 is required, found %s" %
@@ -149,8 +149,6 @@ def _format(label, fmt, datum):
 
 def _dir_to_ord(x, ordinals):
     try:
-        huh = ordinals[int(round(x / 22.5))]
-        loginf("huh ordinals = %s" % huh)
         return ordinals[int(round(x / 22.5))]
     except (ValueError, IndexError):
         pass
@@ -165,14 +163,14 @@ class Mastodon(weewx.restx.StdRESTbase):
                       'P: {barometer:%.3f}; R: {rain:%.3f}'
 
     _DEFAULT_FORMAT_2 = '{station:%s\n} ' \
-                      'Windspeed: {windSpeed:%.1f\n} ' \
-                      'Winddir: {windDir:%03.0f\n} ' \
-                      'Windgust: {windGust:%.1f\n} ' \
-                      'outTemp: {outTemp:%.1f\n} ' \
-                      'outHumidity: {outHumidity:%.2f\n} ' \
-                      'Pressure: {barometer:%.3f\n} ' \
-                      'Rain: {rain:%.3f\n}' \
-                      'Time: {dateTime:%X\n}'
+                        'Windspeed: {windSpeed:%.1f\n} ' \
+                        'Winddir: {windDir:%03.0f\n} ' \
+                        'Windgust: {windGust:%.1f\n} ' \
+                        'outTemp: {outTemp:%.1f\n} ' \
+                        'outHumidity: {outHumidity:%.2f\n} ' \
+                        'Pressure: {barometer:%.3f\n} ' \
+                        'Rain: {rain:%.3f\n}' \
+                        'Date Time: {dateTime:%d %b %Y %H:%I\n}'
 
     _DEFAULT_FORMAT_3 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:'
 
@@ -226,7 +224,7 @@ class Mastodon(weewx.restx.StdRESTbase):
                                               'mastodon_url')
         if site_dict is None:
             return
-        loginf("site_dict = %s" % site_dict)
+        # loginf("site_dict = %s" % site_dict)
 
         # default the station name
         site_dict.setdefault('station', engine.stn_info.location)
@@ -333,7 +331,7 @@ class MastodonThread(weewx.restx.RESTThread):
                 if m:
                     oldstr = m.group(0)
                     fmt = m.group(1)
-            loginf("obs = %s" % obs)
+            # loginf("obs = %s" % obs)
             if oldstr is not None:
                 if obs == 'dateTime':
                     if self.format_utc:
@@ -349,7 +347,7 @@ class MastodonThread(weewx.restx.RESTThread):
                     newstr = fmt % record[obs]
                 msg = msg.replace(oldstr, newstr)
         logdbg('msg: %s' % msg)
-        loginf('info msg: %s' % msg)
+        # loginf('info msg: %s' % msg)
         return msg
 
     def process_record(self, record, dummy_manager):
@@ -366,7 +364,8 @@ class MastodonThread(weewx.restx.RESTThread):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1
-            post = {'status': msg, 'visibility': 'direct'}
+            # post = {'status': msg, 'visibility': 'direct'}
+            post = {'status': msg}
             try:
                 msd = requests.post(self.masturl_status,
                                     data=post,
@@ -374,7 +373,7 @@ class MastodonThread(weewx.restx.RESTThread):
                 print(msd.json()['uri'])
                 loginf("Posted to mastodon as %s" % msg)  # debug only
                 return
-
+                # return early so this doesn't execute - working but unfinished
                 media_id = json.loads(requests.post(self.masturl_media,
                                       files={'file': open('/home/weewx/bin/user/messmatewx.png', "rb")},
                                       data={'focus': '-1.0,1.0',

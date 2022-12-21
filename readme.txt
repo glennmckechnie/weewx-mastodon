@@ -1,13 +1,28 @@
-twitter - weewx extension that sends data to Twitter
+mastodon - weewx extension that sends data to Mastodon
 Copyright 2014-2020 Matthew Wall
 Distributed under the terms of the GNU Public License (GPLv3)
 
 Copyright Glenn McKechnie 2022 (mastodon changes)
 
 ===============================================================================
+
+Currently - this is in ALPHA - or a vague handwaving BETA condition.
+
+You're more than welcome (encouraged) to download and use it - then
+report back on any crashes / bugs / enhancements that may be required.
+
+Just remember that the pieces are always yours.
+
+Otherwise - wait a while...  About the length of a piece of string
+while. :-)
+
+See the comments in mastodon.py on how to set this up - get a key etc.
+
+
+===============================================================================
 Pre-requisites
 
-Geberate an access token on your mastodon server of choice
+Generate an access token on your mastodon server of choice
 
 
 
@@ -16,7 +31,7 @@ Installation instructions
 
 1) download
 
-wget -O weewx-mastodon.zip https://github.com/matthewwall/weewx-mastodon/archive/main.zip
+wget -O weewx-mastodon.zip https://github.com/glennmckechnie/weewx-mastodon/archive/refs/heads/main.zip
 
 2) run the installer:
 
@@ -40,4 +55,4 @@ sudo /etc/init.d/weewx start
 ===============================================================================
 Options
 
-For configuration options and details, see the comments in twitter.py
+For configuration options and details, see the comments in mastodon.py

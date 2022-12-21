@@ -26,7 +26,7 @@ class MastodonInstaller(ExtensionInstaller):
                     'Mastodon': {
                         'access_token': 'Your access token',
                         'mastodon_url': 'Your Mastodon Servers URL',
-                        'format_choice': 'None',
+                        'format_choice': 'simple',
                         'post_interval': '3600'}}},
             files=[('bin/user', ['bin/user/mastodon.py'])]
         )
