@@ -43,8 +43,9 @@ wee_extension --install weewx-mastodon.zip
     [[Mastodon]]
          access_token = your_token_from_preferences/development
          mastodon_url = https://mastodon_servers_name/
-         post_interval = 300
-         format_choice = simple
+         post_interval = 3600
+         format_choice = full
+         cardinal = true
 
 4) restart weewx
 
