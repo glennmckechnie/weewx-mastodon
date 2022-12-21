@@ -65,11 +65,6 @@ For example:
     Ws: {windSpeed}             ->  Ws: 12.3452343
     Ws: {windSpeed:%.3f}        ->  Ws: 12.345
 
-Ordinals can be specified for wind direction:
-
-    Wd: {windDir:%03.0f}        ->  Wd: 090
-    Wd: {windDir:ORD}           ->  Wd: E
-
 The dateTime field is handled slightly differently.  For example:
 
     ts: {dateTime}              ->  ts: 1413994070
@@ -158,23 +153,23 @@ def _dir_to_ord(x, ordinals):
 class Mastodon(weewx.restx.StdRESTbase):
 
     _DEFAULT_FORMAT_1 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:' \
-                      '{windDir:%03.0f}; Wg: {windGust:%.1f};' \
-                      'oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};' \
-                      'P: {barometer:%.3f}; R: {rain:%.3f}'
+                        '{windDir:%03.0f}; Wg: {windGust:%.1f};' \
+                        'oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};' \
+                        'P: {barometer:%.3f}; R: {rain:%.3f}'
 
-    _DEFAULT_FORMAT_2 = '{station:%s\n} ' \
-                        'Windspeed: {windSpeed:%.1f\n} ' \
-                        'Winddir: {windDir:%03.0f\n} ' \
-                        'Windgust: {windGust:%.1f\n} ' \
-                        'outTemp: {outTemp:%.1f\n} ' \
-                        'outHumidity: {outHumidity:%.2f\n} ' \
-                        'Pressure: {barometer:%.3f\n} ' \
-                        'Rain: {rain:%.3f\n}' \
-                        'Date Time: {dateTime:%d %b %Y %H:%I\n}'
+    _DEFAULT_FORMAT_2 = '{station:%s} ' \
+                        '\n Windspeed: {windSpeed:%.1f} ' \
+                        '\n Winddir: {windDir:%03.0f} ' \
+                        '\n Windgust: {windGust:%.1f} ' \
+                        '\n outTemp: {outTemp:%.1f} ' \
+                        '\n outHumidity: {outHumidity:%.2f} ' \
+                        '\n Pressure: {barometer:%.3f} ' \
+                        '\n Rain: {rain:%.3f} ' \
+                        '\n Date Time: {dateTime:%d %b %Y %H:%M}'
 
     _DEFAULT_FORMAT_3 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:'
 
-    _DEFAULT_FORMAT_NONE = '-\n'
+    _DEFAULT_FORMAT_NONE = '-'
     _DEFAULT_ORDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S',
                          'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'N', '-']
 
@@ -212,6 +207,23 @@ class Mastodon(weewx.restx.StdRESTbase):
 
         binding: either loop or archive
         Default is archive
+
+        https://docs.joinmastodon.org/methods/statuses/
+        visibility
+             String. Sets the visibility of the posted status to
+             public,
+             unlisted,
+             private (followers only),
+             direct (mentioned people only).
+
+        cardinal: sets how to display the Ordinals for wind direction
+
+        cardinal = True (default)
+          Wd: {windDir:%03.0f}        ->  Wd: E
+
+        cardinal = False
+          Wd: {windDir:%03.0f}        ->  Wd: 090
+
         """
         super(Mastodon, self).__init__(engine, config_dict)
         loginf('service version is %s' % VERSION)
@@ -220,11 +232,17 @@ class Mastodon(weewx.restx.StdRESTbase):
                                               'Mastodon',
                                               'access_token',
                                               'post_interval',
+                                              'cardinal',
                                               'format_choice',
                                               'mastodon_url')
         if site_dict is None:
+            logerr("site_dict failed, is it complete? : %s" % site_dict)
             return
-        # loginf("site_dict = %s" % site_dict)
+        loginf("site_dict = %s" % site_dict)
+
+        # development only
+        # visibility : options are ... public, unlisted, private, direct
+        site_dict.setdefault('visibility', 'direct')
 
         # default the station name
         site_dict.setdefault('station', engine.stn_info.location)
@@ -237,6 +255,10 @@ class Mastodon(weewx.restx.StdRESTbase):
             site_dict['unit_system'] = weewx.units.unit_constants[usn]
             loginf('units will be converted to %s' % usn)
 
+        site_dict.setdefault('format_ordinal', False)
+        site_dict['format_ordinal'] = to_bool(site_dict.get('cardinal'))
+        # if site_dict['cardinal']:
+        #    site_dict.setdefault['format_ordinal'] = 'ord'
         if site_dict['format_choice'] == 'simple':
             site_dict.setdefault('format', self._DEFAULT_FORMAT_1)
         elif site_dict['format_choice'] == 'full':
@@ -250,6 +272,7 @@ class Mastodon(weewx.restx.StdRESTbase):
         site_dict.setdefault('format_utc', False)
         site_dict['format_utc'] = to_bool(site_dict.get('format_utc'))
         site_dict.setdefault('ordinals', self._DEFAULT_ORDINALS)
+        #loginf("visibility = %s" % self.visibility)
 
         # we can bind to archive or loop events, default to archive
         binding = site_dict.pop('binding', 'archive')
@@ -283,8 +306,9 @@ class Mastodon(weewx.restx.StdRESTbase):
 
 class MastodonThread(weewx.restx.RESTThread):
     def __init__(self, queue,
-                 access_token, mastodon_url, format_choice,
-                 station, format, format_None, ordinals, format_utc=True,
+                 access_token, mastodon_url, visibility, cardinal,
+                 format_choice, station, format, format_None,
+                 ordinals, format_utc=True, format_ordinal=True,
                  unit_system=None, skip_upload=False,
                  log_success=True, log_failure=True,
                  post_interval=None, max_backlog=sys.maxsize, stale=None,
@@ -305,16 +329,22 @@ class MastodonThread(weewx.restx.RESTThread):
         self.masturl_media = mastodon_url + "/api/v2/media"
         self.masturl_status = mastodon_url + "/api/v1/statuses"
         self.mastodon_auth = {'Authorization': 'Bearer ' + access_token}
-
         self.station = station
         self.format = format
         self.format_None = format_None
+        self.visibility = visibility
         self.ordinals = ordinals
         self.format_utc = format_utc
+        self.format_ordinal = format_ordinal
         self.unit_system = unit_system
         self.skip_upload = to_bool(skip_upload)
 
         self.access_token = access_token
+
+        if self.format_ordinal:
+            self.cardinal = 'ord'
+        else:
+            self.cardinal = 'deg'
 
     def format_toot(self, record):
         msg = self.format
@@ -341,8 +371,8 @@ class MastodonThread(weewx.restx.RESTThread):
                     newstr = time.strftime(fmt, ts)
                 elif record[obs] is None:
                     newstr = self.format_None
-                elif obs == 'windDir' and fmt.lower() == 'ord':
-                    newstr = (_dir_to_ord(record[obs], self.ordinals)) + "\n"
+                elif obs == 'windDir' and self.cardinal == 'ord':
+                    newstr = (_dir_to_ord(record[obs], self.ordinals)) #  + "\n"
                 else:
                     newstr = fmt % record[obs]
                 msg = msg.replace(oldstr, newstr)
@@ -364,8 +394,9 @@ class MastodonThread(weewx.restx.RESTThread):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1
-            # post = {'status': msg, 'visibility': 'direct'}
-            post = {'status': msg}
+            post = {'status': msg, 'visibility': self.visibility}
+            loginf("post = %s" % post)
+            # post = {'status': msg}
             try:
                 msd = requests.post(self.masturl_status,
                                     data=post,
