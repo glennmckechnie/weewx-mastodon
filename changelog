@@ -1,0 +1,46 @@
+0.15 08may2020
+* Ported to Python 3 and WeeWX V4. -tk
+
+0.13 19jan2019
+* use both archive and loop threads/queues
+
+0.12 15may2016
+* fixed typo
+
+0.11 15may2016
+* added ordinals for wind direction
+
+0.10 31oct2015
+* fix format_utc directive
+
+0.9 14oct2015
+* update readme with weewx 3.x instructions
+
+0.8 13dec2014
+* replace app_secret with app_key_secret
+
+0.7 06dec2014
+* added skip_upload option for debug and testing
+* update to weewx v3
+
+0.6 22oct2014
+* added format_utc option
+
+0.5 22oct2014
+* added format option
+* do not retry auth failures
+
+0.4 14oct2014
+* fixed binding option
+* added unit_system option
+
+0.3 22sep2014
+* fixed bug that resulted in triple tweets
+
+0.2 22sep2014
+* ensure proper behavior when some observations do not exist
+* improve formatting to stay under 140 character limit
+* fixed trivial coding mistakes in the 0.1 release
+
+0.1 21sep2014
+* initial release
