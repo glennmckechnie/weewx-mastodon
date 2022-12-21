@@ -1,3 +1,9 @@
+0.01 21 Dec 2022
+* adapted to work with mastodon servers
+
+
+============= repurposed as mastodon.py V0.1 ========
+
 0.15 08may2020
 * Ported to Python 3 and WeeWX V4. -tk
 

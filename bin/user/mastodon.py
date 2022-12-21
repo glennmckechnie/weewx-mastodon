@@ -1,43 +1,60 @@
 # Copyright 2014-2020 Matthew Wall
+# Original code was from Mathews twitter.py
+#
+# Re-purposed by Glenn McKechnie 20/12/2022 for Mastodon use.
+# Mastodon is so close to twitter that it was a given to re-purpose this
+# code.
+# Mistakes are mine!
+
 """
-Tweet weather data
+toot weather data
 
-You must first obtain app and oauth credentials in order to tweet.  See the
-twitter developer documentation to obtain these:
+You must first obtain an access token in order to toot.  See the
+mastodon developer documentation to obtain these:
 
-  https://dev.twitter.com/oauth/overview
+Visit the account you are going to post to.
+Open the Preferences lik on the accounts home page, scroll down to the
+'development' link and open that page.
 
-Specifically, you will need four things:  app_key, app_key_secret, oauth_token,
-and oauth_token_secret.
+The page will be Headed Your Applications. Here you will create a new
+Application dedicated to weewx-posting.
+
+Click 'New Application' and complete the required fields  You can accept the
+defaults but you only need 'write' access. Upon completion , Save it and then
+reopen it and copy "Your access token".
+
+You need two things:  that access_token, and the mastodon_url and they will be
+entered into weewx.conf at ....
 
 [StdRESTful]
-    [[Twitter]]
-        app_key = APP_KEY
-        app_key_secret = APP_KEY_SECRET
-        oauth_token = OAUTH_TOKEN
-        oauth_token_secret = OAUTH_TOKEN_SECRET
+    [[Mastodon]]
+        access_token = "Your access token"
+        mastodon_url = "The mastodon url"
 
-Tweets look something like this:
+toots look something like this:
 
-STATION_IDENTIFIER: Ws: 0.0; Wd: -; Wg: 1.1; oT: 7.00; oH: 97.00; P: 1025.307; R: 0.000
+STATION_IDENTIFIER: Ws: 0.0; Wd: -; Wg: 1.1; oT: 7.00;
+                    oH: 97.00; P: 1025.307; R: 0.000
 
 The STATION_IDENTIFIER is the first part of the station 'location' defined in
 weewx.conf.  To specify a different identifier for tweets, use the 'station'
 parameter.  For example:
 
 [StdRESTful]
-    [[Twitter]]
+    [[Mastodon]]
         station = hal
 
 The 'format' parameter determines the tweet contents.  The default format is:
 
-format = {station:%.8s}: Ws: {windSpeed:%.1f}; Wd: {windDir:%03.0f}; Wg: {windGust:%.1f}; oT: {outTemp:%.1f}; oH: {outHumidity:%.2f}; P: {barometer:%.3f}; R: {rain:%.3f}
+format = {station:%.8s}: Ws: {windSpeed:%.1f}; Wd: {windDir:%03.0f};
+         Wg: {windGust:%.1f}; oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};
+         P: {barometer:%.3f}; R: {rain:%.3f}
 
 To specify a different tweet message, use the format parameter.  For example,
 this would tweet only wind information:
 
 [StdRESTful]
-    [[Twitter]]
+    [[Mastodon]]
         format = {station}: Ws: {windSpeed}; Wd: {windDir}; Wg: {windGust}
 
 If there is no value for an observation, the hyphen (-) will display.  If
@@ -64,7 +81,7 @@ StdConvert section of weewx.conf.  To specify a different unit system,
 use the unit_system option:
 
 [StdRESTful]
-    [[Twitter]]
+    [[Mastodon]]
         unit_system = METRICWX
 
 Possible values include US, METRIC, or METRICWX.
@@ -100,7 +117,7 @@ except ImportError:
     import syslog
 
     def logmsg(level, msg):
-        syslog.syslog(level, 'Twitter: %s' % msg)
+        syslog.syslog(level, 'Mastodon: %s' % msg)
 
     def logdbg(msg):
         logmsg(syslog.LOG_DEBUG, msg)
@@ -114,34 +131,52 @@ except ImportError:
 import weewx
 import weewx.restx
 import weewx.units
-from weeutil.weeutil import to_bool, accumulateLeaves
+from weeutil.weeutil import to_bool
+import requests
+import json
 
-from twython import Twython, TwythonError, TwythonAuthError, TwythonRateLimitError
-
-VERSION = "0.15"
+VERSION = "0.02"
 
 if weewx.__version__ < "3":
     raise weewx.UnsupportedFeature("weewx 3 is required, found %s" %
                                    weewx.__version__)
 
 
-
 def _format(label, fmt, datum):
     s = fmt % datum if datum is not None else "None"
     return "%s: %s" % (label, s)
 
+
 def _dir_to_ord(x, ordinals):
     try:
+        huh = ordinals[int(round(x / 22.5))]
+        loginf("huh ordinals = %s" % huh)
         return ordinals[int(round(x / 22.5))]
     except (ValueError, IndexError):
         pass
     return ordinals[17]
 
 
-class Twitter(weewx.restx.StdRESTbase):
+class Mastodon(weewx.restx.StdRESTbase):
 
-    _DEFAULT_FORMAT = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd: {windDir:%03.0f}; Wg: {windGust:%.1f}; oT: {outTemp:%.1f}; oH: {outHumidity:%.2f}; P: {barometer:%.3f}; R: {rain:%.3f}'
-    _DEFAULT_FORMAT_NONE = '-'
+    _DEFAULT_FORMAT_1 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:' \
+                      '{windDir:%03.0f}; Wg: {windGust:%.1f};' \
+                      'oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};' \
+                      'P: {barometer:%.3f}; R: {rain:%.3f}'
+
+    _DEFAULT_FORMAT_2 = '{station:%s\n} ' \
+                      'Windspeed: {windSpeed:%.1f\n} ' \
+                      'Winddir: {windDir:%03.0f\n} ' \
+                      'Windgust: {windGust:%.1f\n} ' \
+                      'outTemp: {outTemp:%.1f\n} ' \
+                      'outHumidity: {outHumidity:%.2f\n} ' \
+                      'Pressure: {barometer:%.3f\n} ' \
+                      'Rain: {rain:%.3f\n}' \
+                      'Time: {dateTime:%X\n}'
+
+    _DEFAULT_FORMAT_3 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:'
+
+    _DEFAULT_FORMAT_NONE = '-\n'
     _DEFAULT_ORDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S',
                          'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'N', '-']
 
@@ -150,11 +185,9 @@ class Twitter(weewx.restx.StdRESTbase):
 
         Required parameters:
 
-        twitter authentication credentials:
-        app_key
-        app_key_secret
-        oauth_token
-        oauth_token_secret
+        mastodon authentication credentials:
+        access_token
+        mastodon_url
 
         Optional parameters:
 
@@ -163,6 +196,12 @@ class Twitter(weewx.restx.StdRESTbase):
 
         unit_system: one of US, METRIC, or METRICWX
         Default is None; units will be those of the data in the database
+
+        format_choice: indicates how the tweet should be rendered via the
+        inbuilt defaults.
+        simple contains basic weather data
+        full contains the basic weather data with non abbreviated descriptions,
+         new lines, ordinates for windDir and DateTime field
 
         format: indicates how the tweet should be rendered
         Default contains basic weather data
@@ -176,26 +215,39 @@ class Twitter(weewx.restx.StdRESTbase):
         binding: either loop or archive
         Default is archive
         """
-        super(Twitter, self).__init__(engine, config_dict)
+        super(Mastodon, self).__init__(engine, config_dict)
         loginf('service version is %s' % VERSION)
 
-        site_dict = weewx.restx.get_site_dict(config_dict, 'Twitter', 'app_key', 'app_key_secret',
-                                              'oauth_token', 'oauth_token_secret')
+        site_dict = weewx.restx.get_site_dict(config_dict,
+                                              'Mastodon',
+                                              'access_token',
+                                              'post_interval',
+                                              'format_choice',
+                                              'mastodon_url')
         if site_dict is None:
             return
+        loginf("site_dict = %s" % site_dict)
 
         # default the station name
         site_dict.setdefault('station', engine.stn_info.location)
 
         # if a unit system was specified, get the weewx constant for it.
         # do it here so a bogus unit system will cause weewx to die
-        # immediately, not simply cause the twitter thread to crap out.
+        # immediately, not simply cause the mastodon thread to crap out.
         usn = site_dict.get('unit_system')
         if usn is not None:
             site_dict['unit_system'] = weewx.units.unit_constants[usn]
             loginf('units will be converted to %s' % usn)
 
-        site_dict.setdefault('format', self._DEFAULT_FORMAT)
+        if site_dict['format_choice'] == 'simple':
+            site_dict.setdefault('format', self._DEFAULT_FORMAT_1)
+        elif site_dict['format_choice'] == 'full':
+            site_dict.setdefault('format', self._DEFAULT_FORMAT_2)
+        elif site_dict['format_choice'] == 'template':
+            site_dict.setdefault('format', self._DEFAULT_FORMAT_3)
+        else:
+            site_dict.setdefault('format', self._DEFAULT_FORMAT_3)
+
         site_dict.setdefault('format_None', self._DEFAULT_FORMAT_NONE)
         site_dict.setdefault('format_utc', False)
         site_dict['format_utc'] = to_bool(site_dict.get('format_utc'))
@@ -208,7 +260,7 @@ class Twitter(weewx.restx.StdRESTbase):
         loginf('binding is %s' % binding)
 
         self.data_queue = queue.Queue()
-        data_thread = TwitterThread(self.data_queue, **site_dict)
+        data_thread = MastodonThread(self.data_queue, **site_dict)
         data_thread.start()
 
         if 'loop' in binding.lower():
@@ -216,7 +268,7 @@ class Twitter(weewx.restx.StdRESTbase):
         if 'archive' in binding.lower():
             self.bind(weewx.NEW_ARCHIVE_RECORD, self.handle_new_archive)
 
-        loginf("Data will be tweeted for %s" % site_dict['station'])
+        loginf("Data will be tooted for %s" % site_dict['station'])
 
     def handle_new_loop(self, event):
         # Make a copy... we will modify it
@@ -230,29 +282,32 @@ class Twitter(weewx.restx.StdRESTbase):
         record['binding'] = 'archive'
         self.data_queue.put(record)
 
-class TwitterThread(weewx.restx.RESTThread):
-    def __init__(self, queue, 
-                 app_key, app_key_secret, oauth_token, oauth_token_secret,
+
+class MastodonThread(weewx.restx.RESTThread):
+    def __init__(self, queue,
+                 access_token, mastodon_url, format_choice,
                  station, format, format_None, ordinals, format_utc=True,
                  unit_system=None, skip_upload=False,
                  log_success=True, log_failure=True,
                  post_interval=None, max_backlog=sys.maxsize, stale=None,
                  timeout=60, max_tries=3, retry_wait=5):
-        super(TwitterThread, self).__init__(queue,
-                                            protocol_name='Twitter',
-                                            manager_dict=None,
-                                            post_interval=post_interval,
-                                            max_backlog=max_backlog,
-                                            stale=stale,
-                                            log_success=log_success,
-                                            log_failure=log_failure,
-                                            max_tries=max_tries,
-                                            timeout=timeout,
-                                            retry_wait=retry_wait)
-        self.app_key = app_key
-        self.app_key_secret = app_key_secret
-        self.oauth_token = oauth_token
-        self.oauth_token_secret = oauth_token_secret
+        super(MastodonThread, self).__init__(queue,
+                                             protocol_name='Mastodon',
+                                             manager_dict=None,
+                                             post_interval='3600',
+                                             max_backlog=max_backlog,
+                                             stale=stale,
+                                             log_success=log_success,
+                                             log_failure=log_failure,
+                                             max_tries=max_tries,
+                                             timeout=timeout,
+                                             retry_wait=retry_wait)
+
+        # Mastodon Information
+        self.masturl_media = mastodon_url + "/api/v2/media"
+        self.masturl_status = mastodon_url + "/api/v1/statuses"
+        self.mastodon_auth = {'Authorization': 'Bearer ' + access_token}
+
         self.station = station
         self.format = format
         self.format_None = format_None
@@ -261,7 +316,9 @@ class TwitterThread(weewx.restx.RESTThread):
         self.unit_system = unit_system
         self.skip_upload = to_bool(skip_upload)
 
-    def format_tweet(self, record):
+        self.access_token = access_token
+
+    def format_toot(self, record):
         msg = self.format
         for obs in record:
             oldstr = None
@@ -276,6 +333,7 @@ class TwitterThread(weewx.restx.RESTThread):
                 if m:
                     oldstr = m.group(0)
                     fmt = m.group(1)
+            loginf("obs = %s" % obs)
             if oldstr is not None:
                 if obs == 'dateTime':
                     if self.format_utc:
@@ -286,11 +344,12 @@ class TwitterThread(weewx.restx.RESTThread):
                 elif record[obs] is None:
                     newstr = self.format_None
                 elif obs == 'windDir' and fmt.lower() == 'ord':
-                    newstr = _dir_to_ord(record[obs], self.ordinals)
+                    newstr = (_dir_to_ord(record[obs], self.ordinals)) + "\n"
                 else:
                     newstr = fmt % record[obs]
                 msg = msg.replace(oldstr, newstr)
         logdbg('msg: %s' % msg)
+        loginf('info msg: %s' % msg)
         return msg
 
     def process_record(self, record, dummy_manager):
@@ -298,7 +357,7 @@ class TwitterThread(weewx.restx.RESTThread):
             record = weewx.units.to_std_system(record, self.unit_system)
         record['station'] = self.station
 
-        msg = self.format_tweet(record)
+        msg = self.format_toot(record)
         if self.skip_upload:
             loginf('skipping upload')
             return
@@ -307,18 +366,25 @@ class TwitterThread(weewx.restx.RESTThread):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1
+            post = {'status': msg, 'visibility': 'direct'}
             try:
-                twitter = Twython(self.app_key, self.app_key_secret,
-                                  self.oauth_token, self.oauth_token_secret)
-                twitter.update_status(status=msg)
+                msd = requests.post(self.masturl_status,
+                                    data=post,
+                                    headers=self.mastodon_auth)
+                print(msd.json()['uri'])
+                loginf("Posted to mastodon as %s" % msg)  # debug only
                 return
-            except TwythonAuthError as e:
+
+                media_id = json.loads(requests.post(self.masturl_media,
+                                      files={'file': open('/home/weewx/bin/user/messmatewx.png', "rb")},
+                                      data={'focus': '-1.0,1.0',
+                                            'description': 'test upload'},
+                                      headers=self.mastodon_auth).text)['id']
+                loginf("Image is posted as %s" % media_id)  # debug only
+
+                return
+            except Exception as e:
                 raise weewx.restx.FailedPost("Authorization failed: %s" % e)
-            except (TwythonError, TwythonRateLimitError) as e:
-                logerr("Failed attempt %d of %d: %s" %
-                       (ntries, self.max_tries, e))
-                logdbg("Waiting %d seconds before retry" % self.retry_wait)
-                time.sleep(self.retry_wait)
         else:
             raise weewx.restx.FailedPost("Max retries (%d) exceeded" %
                                          self.max_tries)

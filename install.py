@@ -1,29 +1,32 @@
-# installer for Twitter
+# installer for Mastodon
 # Copyright 2014-2020 Matthew Wall
 # Distributed under the terms of the GNU Public License (GPLv3)
+#
+# Repurposed from twitter to Mastodon
+# Copyright 2022 Glenn McKechnie : glenn.mckechnie@gmail.com
 
 from weecfg.extension import ExtensionInstaller
 
 
 def loader():
-    return TwitterInstaller()
+    return MastodonInstaller()
 
 
-class TwitterInstaller(ExtensionInstaller):
+class MastodonInstaller(ExtensionInstaller):
     def __init__(self):
-        super(TwitterInstaller, self).__init__(
-            version="0.15",
-            name='twitter',
-            description='tweet weather data',
+        super(MastodonInstaller, self).__init__(
+            version="0.01",
+            name='mastodon',
+            description='toot weather data',
             author="Matthew Wall",
-            author_email="mwall@users.sourceforge.net",
-            restful_services='user.twitter.Twitter',
+            author_email="glenn.mckechnie@gmail.com",
+            restful_services='user.mastodon.Mastodon',
             config={
                 'StdRESTful': {
-                    'Twitter': {
-                        'app_key': 'APP_KEY',
-                        'app_key_secret': 'APP_KEY_SECRET',
-                        'oauth_token': 'OAUTH_TOKEN',
-                        'oauth_token_secret': 'OAUTH_TOKEN_SECRET'}}},
-            files=[('bin/user', ['bin/user/twitter.py'])]
+                    'Mastodon': {
+                        'access_token': 'Your access token',
+                        'mastodon_url': 'Your Mastodon Servers URL',
+                        'format_choice': 'None',
+                        'post_interval': '3600'}}},
+            files=[('bin/user', ['bin/user/mastodon.py'])]
         )
