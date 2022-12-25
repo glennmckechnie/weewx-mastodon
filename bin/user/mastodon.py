@@ -6,6 +6,9 @@
 # code.
 # Mistakes are mine!
 
+# https://github.com/halcy/Mastodon.py
+# pip3 install Mastodon.py
+
 """
 toot weather data
 
@@ -91,6 +94,13 @@ except ImportError:
 import re
 import sys
 import time
+import weewx
+import weewx.restx
+import weewx.units
+from weeutil.weeutil import to_bool
+import requests
+import shutil
+from mastodon import Mastodon
 
 try:
     # Test for new-style weewx logging by trying to import weeutil.logger
@@ -123,14 +133,8 @@ except ImportError:
     def logerr(msg):
         logmsg(syslog.LOG_ERR, msg)
 
-import weewx
-import weewx.restx
-import weewx.units
-from weeutil.weeutil import to_bool
-import requests
-import json
 
-VERSION = "0.01"
+VERSION = "0.02"
 
 if weewx.__version__ < "3":
     raise weewx.UnsupportedFeature("weewx 3 is required, found %s" %
@@ -150,7 +154,7 @@ def _dir_to_ord(x, ordinals):
     return ordinals[17]
 
 
-class Mastodon(weewx.restx.StdRESTbase):
+class Rastodon(weewx.restx.StdRESTbase):
 
     _DEFAULT_FORMAT_1 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:' \
                         '{windDir:%03.0f}; Wg: {windGust:%.1f};' \
@@ -225,7 +229,7 @@ class Mastodon(weewx.restx.StdRESTbase):
           Wd: {windDir:%03.0f}        ->  Wd: 090
 
         """
-        super(Mastodon, self).__init__(engine, config_dict)
+        super(Rastodon, self).__init__(engine, config_dict)
         loginf('service version is %s' % VERSION)
 
         site_dict = weewx.restx.get_site_dict(config_dict,
@@ -272,7 +276,7 @@ class Mastodon(weewx.restx.StdRESTbase):
         site_dict.setdefault('format_utc', False)
         site_dict['format_utc'] = to_bool(site_dict.get('format_utc'))
         site_dict.setdefault('ordinals', self._DEFAULT_ORDINALS)
-        #loginf("visibility = %s" % self.visibility)
+        # loginf("visibility = %s" % self.visibility)
 
         # we can bind to archive or loop events, default to archive
         binding = site_dict.pop('binding', 'archive')
@@ -290,6 +294,7 @@ class Mastodon(weewx.restx.StdRESTbase):
             self.bind(weewx.NEW_ARCHIVE_RECORD, self.handle_new_archive)
 
         loginf("Data will be tooted for %s" % site_dict['station'])
+
 
     def handle_new_loop(self, event):
         # Make a copy... we will modify it
@@ -325,10 +330,15 @@ class MastodonThread(weewx.restx.RESTThread):
                                              timeout=timeout,
                                              retry_wait=retry_wait)
 
+        self.mstdn = Mastodon(access_token=access_token,
+                              api_base_url=mastodon_url)
+
         # Mastodon Information
         self.masturl_media = mastodon_url + "/api/v2/media"
-        self.masturl_status = mastodon_url + "/api/v1/statuses"
+        # self.masturl_status = mastodon_url + "/api/v1/statuses"
         self.mastodon_auth = {'Authorization': 'Bearer ' + access_token}
+        self.access_token = access_token
+        self.mastodon_url = 'https://mastodon.au/'
         self.station = station
         self.format = format
         self.format_None = format_None
@@ -339,7 +349,9 @@ class MastodonThread(weewx.restx.RESTThread):
         self.unit_system = unit_system
         self.skip_upload = to_bool(skip_upload)
 
-        self.access_token = access_token
+        # self.access_token = access_token
+        self.mstdn = Mastodon(access_token=self.access_token,
+                              api_base_url=self.mastodon_url)
 
         if self.format_ordinal:
             self.cardinal = 'ord'
@@ -372,7 +384,7 @@ class MastodonThread(weewx.restx.RESTThread):
                 elif record[obs] is None:
                     newstr = self.format_None
                 elif obs == 'windDir' and self.cardinal == 'ord':
-                    newstr = (_dir_to_ord(record[obs], self.ordinals)) #  + "\n"
+                    newstr = (_dir_to_ord(record[obs], self.ordinals))
                 else:
                     newstr = fmt % record[obs]
                 msg = msg.replace(oldstr, newstr)
@@ -394,27 +406,69 @@ class MastodonThread(weewx.restx.RESTThread):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1
-            post = {'status': msg, 'visibility': self.visibility}
-            loginf("post = %s" % post)
-            # post = {'status': msg}
             try:
-                msd = requests.post(self.masturl_status,
-                                    data=post,
-                                    headers=self.mastodon_auth)
-                print(msd.json()['uri'])
-                loginf("Posted to mastodon as %s" % msg)  # debug only
-                return
-                # return early so this doesn't execute - working but unfinished
-                media_id = json.loads(requests.post(self.masturl_media,
-                                      files={'file': open('/home/weewx/bin/user/messmatewx.png', "rb")},
-                                      data={'focus': '-1.0,1.0',
-                                            'description': 'test upload'},
-                                      headers=self.mastodon_auth).text)['id']
-                loginf("Image is posted as %s" % media_id)  # debug only
+                #loginf("Mastodon NOT running")
+                #return
+                pass
+            except Exception as e:
+                logerr("1st except is %s" % e)
+
+            # collect images / media
+            try:
+                # fetch from web server
+                image = requests.get('http://127.0.0.1/weewx/wxgraphic/index.php', stream = True)
+                if image.status_code == 200:
+                     # Set decode_content value to True, otherwise the downloaded image file's size will be zero.
+                     image.raw.decode_content = True
+
+                img = '/tmp/wxgraphic.png'
+                with open(img,'wb') as f:
+                    shutil.copyfileobj(image.raw, f)
+                loginf("Local image output as %s " % image)
+
+                # fetch from local file system
+                img_1 = '/tmp/daytempdew.png'
+                img_2 = '/var/www/html/weewx/dayrain.png'
+                img_3 = '/var/www/html/weewx/daywind.png'
+
+                # maybe a list to loop thru?
+                images = (img, img_1, img_2, img_3)
+            except Exception as e:
+                logerr("2nd except is %s" % e)
+                # raise weewx.restx.FailedPost("Local image fetch failed: %s" % e)
+
+            # Mastodon.media_post
+
+            media_id0 = self.mstdn.media_post(img)
+            media_id1 = self.mstdn.media_post(img_1)
+            media_id2 = self.mstdn.media_post(img_2)
+            media_id3 = self.mstdn.media_post(img_3)
+            logdbg("media posted as %s & %s & %s & %s" % (media_id0,
+                                                          media_id1,
+                                                          media_id2,
+                                                          media_id3))
+            try:
+                # _msg = ''
+                self.mstdn.status_post(msg,
+                                       media_ids=(media_id0, media_id1,
+                                       media_id2, media_id3),
+                                       sensitive=False)
+                                       # ,spoiler_text=msg)
+            except Exception as e:
+                logerr("3rd except is %s" % e)
+                #raise weewx.restx.FailedPost("media_id failed: %s" % e)
+
+            try:
+                self.mstdn.status_post(msg)  # ,
+                                      # spoiler_text='test_upload')
+                                      # media_ids=media_id,
+
+                #logdbg("mastodon as %s" % msg)  # debug only
 
                 return
             except Exception as e:
-                raise weewx.restx.FailedPost("Authorization failed: %s" % e)
+                logerr("4th except is %s" % e)
+                #raise weewx.restx.FailedPost("Authorization mstdn failed: %s" % e)
         else:
             raise weewx.restx.FailedPost("Max retries (%d) exceeded" %
                                          self.max_tries)
