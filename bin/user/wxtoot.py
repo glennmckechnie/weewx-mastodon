@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # Copyright 2014-2020 Matthew Wall
 # Original code was from Mathews twitter.py
 #
@@ -31,8 +32,8 @@ entered into weewx.conf at ....
 
 [StdRESTful]
     [[Mastodon]]
-        access_token = "Your access token"
-        mastodon_url = "The mastodon url"
+        key_access_token = "Your access token"
+        server_url_mastodon = "The mastodon url"
 
 toots look something like this:
 
@@ -84,7 +85,6 @@ use the unit_system option:
 
 Possible values include US, METRIC, or METRICWX.
 """
-import pdb
 
 try:
     # Python 3
@@ -101,7 +101,7 @@ import weewx.units
 from weeutil.weeutil import to_bool
 import requests
 import shutil
-pdb.set_trace()
+import glob
 from mastodon import Mastodon
 
 try:
@@ -156,7 +156,7 @@ def _dir_to_ord(x, ordinals):
     return ordinals[17]
 
 
-class Rastodon(weewx.restx.StdRESTbase):
+class Toot(weewx.restx.StdRESTbase):
 
     _DEFAULT_FORMAT_1 = '{station:%.8s}: Ws: {windSpeed:%.1f}; Wd:' \
                         '{windDir:%03.0f}; Wg: {windGust:%.1f};' \
@@ -185,8 +185,8 @@ class Rastodon(weewx.restx.StdRESTbase):
         Required parameters:
 
         mastodon authentication credentials:
-        access_token
-        mastodon_url
+        key_access_token
+        server_url_mastodon
 
         Optional parameters:
 
@@ -231,22 +231,25 @@ class Rastodon(weewx.restx.StdRESTbase):
           Wd: {windDir:%03.0f}        ->  Wd: 090
 
         """
-        print('service version is %s' % VERSION)
-        super(Rastodon, self).__init__(engine, config_dict)
+        super(Toot, self).__init__(engine, config_dict)
         loginf('service version is %s' % VERSION)
-        print('service version is %s' % VERSION)
 
         site_dict = weewx.restx.get_site_dict(config_dict,
                                               'Mastodon',
-                                              'access_token',
+                                              'key_access_token',
+                                              'server_url_mastodon',
+                                              'format_choice',
                                               'post_interval',
                                               'cardinal',
-                                              'format_choice',
-                                              'mastodon_url')
+                                              'server_url_image',
+                                              'image_directory',
+                                              'template_file'
+                                              )
         if site_dict is None:
             logerr("site_dict failed, is it complete? : %s" % site_dict)
             return
         loginf("site_dict = %s" % site_dict)
+        loginf("config_dict = %s" % config_dict)
 
         # development only
         # visibility : options are ... public, unlisted, private, direct
@@ -259,6 +262,7 @@ class Rastodon(weewx.restx.StdRESTbase):
         # do it here so a bogus unit system will cause weewx to die
         # immediately, not simply cause the mastodon thread to crap out.
         usn = site_dict.get('unit_system')
+        loginf("units are usn %s" % usn)
         if usn is not None:
             site_dict['unit_system'] = weewx.units.unit_constants[usn]
             loginf('units will be converted to %s' % usn)
@@ -271,8 +275,6 @@ class Rastodon(weewx.restx.StdRESTbase):
             site_dict.setdefault('format', self._DEFAULT_FORMAT_1)
         elif site_dict['format_choice'] == 'full':
             site_dict.setdefault('format', self._DEFAULT_FORMAT_2)
-        elif site_dict['format_choice'] == 'template':
-            site_dict.setdefault('format', self._DEFAULT_FORMAT_3)
         else:
             site_dict.setdefault('format', self._DEFAULT_FORMAT_3)
 
@@ -289,7 +291,7 @@ class Rastodon(weewx.restx.StdRESTbase):
         loginf('binding is %s' % binding)
 
         self.data_queue = queue.Queue()
-        data_thread = MastodonThread(self.data_queue, **site_dict)
+        data_thread = TootThread(self.data_queue, **site_dict)
         data_thread.start()
 
         if 'loop' in binding.lower():
@@ -312,16 +314,17 @@ class Rastodon(weewx.restx.StdRESTbase):
         self.data_queue.put(record)
 
 
-class MastodonThread(weewx.restx.RESTThread):
+class TootThread(weewx.restx.RESTThread):
     def __init__(self, queue,
-                 access_token, mastodon_url, visibility, cardinal,
-                 format_choice, station, format, format_None,
+                 server_url_image, image_directory, template_file,
+                 key_access_token, server_url_mastodon, visibility,
+                 cardinal, format_choice, station, format, format_None,
                  ordinals, format_utc=True, format_ordinal=True,
                  unit_system=None, skip_upload=False,
                  log_success=True, log_failure=True,
                  post_interval=None, max_backlog=sys.maxsize, stale=None,
                  timeout=60, max_tries=3, retry_wait=5):
-        super(MastodonThread, self).__init__(queue,
+        super(TootThread, self).__init__(queue,
                                              protocol_name='Mastodon',
                                              manager_dict=None,
                                              post_interval='3600',
@@ -333,16 +336,14 @@ class MastodonThread(weewx.restx.RESTThread):
                                              timeout=timeout,
                                              retry_wait=retry_wait)
 
-        self.mstdn = Mastodon(access_token=access_token,
-                              api_base_url=mastodon_url)
+        self.mstdn = Mastodon(access_token=key_access_token,
+                              api_base_url=server_url_mastodon)
 
-        # Mastodon Information
-        self.masturl_media = mastodon_url + "/api/v2/media"
-        # self.masturl_status = mastodon_url + "/api/v1/statuses"
-        self.mastodon_auth = {'Authorization': 'Bearer ' + access_token}
-        self.access_token = access_token
-        self.mastodon_url = 'https://mastodon.au/'
+        self.image_server = server_url_image
+        self.image_directory = image_directory
+        self.template_file = template_file
         self.station = station
+        self.format_choice = format_choice
         self.format = format
         self.format_None = format_None
         self.visibility = visibility
@@ -351,10 +352,6 @@ class MastodonThread(weewx.restx.RESTThread):
         self.format_ordinal = format_ordinal
         self.unit_system = unit_system
         self.skip_upload = to_bool(skip_upload)
-
-        # self.access_token = access_token
-        self.mstdn = Mastodon(access_token=self.access_token,
-                              api_base_url=self.mastodon_url)
 
         if self.format_ordinal:
             self.cardinal = 'ord'
@@ -400,7 +397,13 @@ class MastodonThread(weewx.restx.RESTThread):
             record = weewx.units.to_std_system(record, self.unit_system)
         record['station'] = self.station
 
-        msg = self.format_toot(record)
+        if self.format_choice == 'template' and self.template_file:
+            with open(self.template_file, 'r') as f:
+                msg = f.read()
+                msg = "msg from template:" + msg.replace("\\n", "\n")
+        else:
+            msg = self.format_toot(record)
+
         if self.skip_upload:
             loginf('skipping upload')
             return
@@ -409,87 +412,73 @@ class MastodonThread(weewx.restx.RESTThread):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1
+            imgs = ''
             try:
-                # loginf("Mastodon NOT running")
-                # return
-                pass
-            except Exception as e:
-                logerr("1st except is %s" % e)
+                # fetch an image from a web server
+                our_images = []
+                if self.image_server:
+                    # Only the web server? Then put the img files in /tmp
+                    if not self.image_directory:
+                        self.serv_image_directory = '/tmp/'
+                    else:
+                        self.serv_image_directory = self.image_directory
+                    image = requests.get(self.image_server, stream=True)
+                    if image.status_code == 200:
+                        # Set decode_content value to True, otherwise the
+                        # downloaded image file's size will be zero.
+                        image.raw.decode_content = True
+                    img_0 = (self.serv_image_directory + 'wxgraphic.png')
 
-            # collect images / media
-            try:
-                # fetch from web server
-                image = requests.get('http://127.0.0.1/weewx/wxgraphic/index.php', stream = True)
-                if image.status_code == 200:
-                    # Set decode_content value to True, otherwise the
-                    # downloaded image file's size will be zero.
-                    image.raw.decode_content = True
+                    with open(img_0, 'wb') as f:
+                        shutil.copyfileobj(image.raw, f)
+                    our_images.append(img_0)
+                    loginf("Image server saved: %s with %s " % (img_0, image))
 
-                img = '/tmp/wxgraphic.png'
-                with open(img, 'wb') as f:
-                    shutil.copyfileobj(image.raw, f)
-                loginf("Local image output as %s " % image)
+                # fetch images from the local file system
+                if self.image_directory:
+                    self.allow_ext = '.png'
+                    for imgs in glob.iglob(f'{self.image_directory}/*'):
+                        if (imgs == img_0):
+                            continue
+                        if (imgs.endswith(".png")) or (imgs.endswith(".jpg")):
+                            our_images.append(imgs)
+                        elif (imgs.endswith(".gif")) or (imgs.endswith(".webp")):
+                            our_images.append(imgs)
+                    # but there can be only 1^H 4
+                    our_images = our_images[:4]
 
-                # fetch from local file system
-                img_1 = '/tmp/daytempdew.png'
-                img_2 = '/var/www/html/weewx/dayrain.png'
-                img_3 = '/var/www/html/weewx/daywind.png'
+                loginf("length of our_images %s " % len(our_images))
+                loginf("our images %s" % our_images)
 
-                # maybe a list to loop thru?
-                images = (img, img_1, img_2, img_3)
             except Exception as e:
                 logerr("2nd except is %s" % e)
-                # raise weewx.restx.FailedPost("Local image fetch failed: %s" % e)
+                raise weewx.restx.FailedPost("local images failed: %s" % e)
 
             # Mastodon.media_post
-
-            media_id0 = self.mstdn.media_post(img)
-            media_id1 = self.mstdn.media_post(img_1)
-            media_id2 = self.mstdn.media_post(img_2)
-            media_id3 = self.mstdn.media_post(img_3)
-            logdbg("media posted as %s & %s & %s & %s" % (media_id0,
-                                                          media_id1,
-                                                          media_id2,
-                                                          media_id3))
-            try:
-                # _msg = ''
-                self.mstdn.status_post(msg,
-                                       media_ids=(media_id0, media_id1,
-                                                  media_id2, media_id3),
-                                       sensitive=False)
-                                       # ,spoiler_text=msg)
-            except Exception as e:
-                logerr("3rd except is %s" % e)
-                # raise weewx.restx.FailedPost("media_id failed: %s" % e)
-
-            try:
-                self.mstdn.status_post(msg)  # ,
-                                      # spoiler_text='test_upload')
-                                      # media_ids=media_id,
-
-                # logdbg("mastodon as %s" % msg)  # debug only
-
-                return
-            except Exception as e:
-                logerr("4th except is %s" % e)
-                # raise weewx.restx.FailedPost("Authorization mstdn failed: %s" % e)
+            loginf("length of our_images is %s" % len(our_images))
+            if len(our_images) != 0:
+                media_list = []
+                for media in range(len(our_images)):
+                    loginf("media is %s" % our_images[media])
+                    media_id = self.mstdn.media_post(our_images[media])
+                    media_list.append(media_id)
+                # loginf("our media_list images are %s : %s" % (media, media_list))
+                try:
+                    msg = "status_post with media: " + msg
+                    self.mstdn.status_post(msg,
+                                           media_ids=media_list,
+                                           sensitive=False)
+                    # ,spoiler_text=msg)
+                except Exception as e:
+                    raise weewx.restx.FailedPost("media_post failed: %s" % e)
+            else:
+                try:
+                    msg = "status_post: " + msg
+                    self.mstdn.status_post(msg)
+                    return
+                except Exception as e:
+                    raise weewx.restx.FailedPost("status_post failed: %s" % e)
+            return
         else:
             raise weewx.restx.FailedPost("Max retries (%d) exceeded" %
                                          self.max_tries)
-
-
-if __name__ == "__main__":
-    from weewx.engine import StdEngine
-    site_dict = {
-                'Mastodon',
-                'access_token',
-                'post_interval',
-                'cardinal',
-                'format_choice',
-                'mastodon_url'}
-
-    def main():
-        import pdb
-        #from mastodon import Mastodon
-        print("service version is s")
-        Rastodon()
