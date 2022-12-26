@@ -84,6 +84,7 @@ use the unit_system option:
 
 Possible values include US, METRIC, or METRICWX.
 """
+import pdb
 
 try:
     # Python 3
@@ -100,6 +101,7 @@ import weewx.units
 from weeutil.weeutil import to_bool
 import requests
 import shutil
+pdb.set_trace()
 from mastodon import Mastodon
 
 try:
@@ -229,8 +231,10 @@ class Rastodon(weewx.restx.StdRESTbase):
           Wd: {windDir:%03.0f}        ->  Wd: 090
 
         """
+        print('service version is %s' % VERSION)
         super(Rastodon, self).__init__(engine, config_dict)
         loginf('service version is %s' % VERSION)
+        print('service version is %s' % VERSION)
 
         site_dict = weewx.restx.get_site_dict(config_dict,
                                               'Mastodon',
@@ -294,7 +298,6 @@ class Rastodon(weewx.restx.StdRESTbase):
             self.bind(weewx.NEW_ARCHIVE_RECORD, self.handle_new_archive)
 
         loginf("Data will be tooted for %s" % site_dict['station'])
-
 
     def handle_new_loop(self, event):
         # Make a copy... we will modify it
@@ -407,8 +410,8 @@ class MastodonThread(weewx.restx.RESTThread):
         while ntries < self.max_tries:
             ntries += 1
             try:
-                #loginf("Mastodon NOT running")
-                #return
+                # loginf("Mastodon NOT running")
+                # return
                 pass
             except Exception as e:
                 logerr("1st except is %s" % e)
@@ -418,11 +421,12 @@ class MastodonThread(weewx.restx.RESTThread):
                 # fetch from web server
                 image = requests.get('http://127.0.0.1/weewx/wxgraphic/index.php', stream = True)
                 if image.status_code == 200:
-                     # Set decode_content value to True, otherwise the downloaded image file's size will be zero.
-                     image.raw.decode_content = True
+                    # Set decode_content value to True, otherwise the
+                    # downloaded image file's size will be zero.
+                    image.raw.decode_content = True
 
                 img = '/tmp/wxgraphic.png'
-                with open(img,'wb') as f:
+                with open(img, 'wb') as f:
                     shutil.copyfileobj(image.raw, f)
                 loginf("Local image output as %s " % image)
 
@@ -451,24 +455,41 @@ class MastodonThread(weewx.restx.RESTThread):
                 # _msg = ''
                 self.mstdn.status_post(msg,
                                        media_ids=(media_id0, media_id1,
-                                       media_id2, media_id3),
+                                                  media_id2, media_id3),
                                        sensitive=False)
                                        # ,spoiler_text=msg)
             except Exception as e:
                 logerr("3rd except is %s" % e)
-                #raise weewx.restx.FailedPost("media_id failed: %s" % e)
+                # raise weewx.restx.FailedPost("media_id failed: %s" % e)
 
             try:
                 self.mstdn.status_post(msg)  # ,
                                       # spoiler_text='test_upload')
                                       # media_ids=media_id,
 
-                #logdbg("mastodon as %s" % msg)  # debug only
+                # logdbg("mastodon as %s" % msg)  # debug only
 
                 return
             except Exception as e:
                 logerr("4th except is %s" % e)
-                #raise weewx.restx.FailedPost("Authorization mstdn failed: %s" % e)
+                # raise weewx.restx.FailedPost("Authorization mstdn failed: %s" % e)
         else:
             raise weewx.restx.FailedPost("Max retries (%d) exceeded" %
                                          self.max_tries)
+
+
+if __name__ == "__main__":
+    from weewx.engine import StdEngine
+    site_dict = {
+                'Mastodon',
+                'access_token',
+                'post_interval',
+                'cardinal',
+                'format_choice',
+                'mastodon_url'}
+
+    def main():
+        import pdb
+        #from mastodon import Mastodon
+        print("service version is s")
+        Rastodon()
