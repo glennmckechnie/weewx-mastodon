@@ -11,16 +11,25 @@
 # pip3 install Mastodon.py
 
 """
+NB:
+You are creating a bot. Play nicely.
+
+The default post_interval is 3600 seconds (1 hour). You can change it.
+
+You can make it longer (more resources for other users) or make it less (fewer
+resources...) Keep in mind the bot is posting constantly, no sleep, no rest, no
+lull. It's a compromise and the aim is to avoid the Tragedy of the commons.
+
 toot weather data
 
 You must first obtain an access token in order to toot.  See the
 mastodon developer documentation to obtain these:
 
-Visit the account you are going to post to.
+Login to the account you are going to post to.
 Open the Preferences lik on the accounts home page, scroll down to the
 'development' link and open that page.
 
-The page will be Headed Your Applications. Here you will create a new
+The page will be headed Your Applications. Here you will create a new
 Application dedicated to weewx-posting.
 
 Click 'New Application' and complete the required fields  You can accept the
@@ -54,14 +63,14 @@ STATION_IDENTIFIER:
  Date Time: 27 Dec 2022 18:06
 
 The STATION_IDENTIFIER is the first part of the station 'location' defined in
-weewx.conf.  To specify a different identifier for tweets, use the 'station'
+weewx.conf.  To specify a different identifier for toots, use the 'station'
 parameter.  For example:
 
 [StdRESTful]
     [[Mastodon]]
         station = hal
 
-The 'format' parameter determines the tweet contents.
+The 'format' parameter determines the toot contents.
 
 Besides specifying a format, there are 3 coded options to choose from
 [StdRESTful]
@@ -85,16 +94,16 @@ format = {station:%.8s}: Ws: {windSpeed:%.1f}; Wd: {windDir:%03.0f};
          Wg: {windGust:%.1f}; oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};
          P: {barometer:%.3f}; R: {rain:%.3f}
 
-The 'template' option allows the user to take full control of the layout in
-the format of a weewx style template.
-See the template directory and notes written there.
-
-To specify a different tweet message, use the format parameter.  For example,
-this would tweet only wind information:
+To specify a different toot message, use the format parameter.  For example,
+this would toot only wind information:
 
 [StdRESTful]
     [[Mastodon]]
         format = {station}: Ws: {windSpeed}; Wd: {windDir}; Wg: {windGust}
+
+Finally. The 'template' option allows the user to take full control of the
+layout in the format of a weewx style template.
+See the template directory and notes written there.
 
 If there is no value for an observation, the hyphen (-) will display.  If
 the observation does not exist, the observation label will not be replaced.
