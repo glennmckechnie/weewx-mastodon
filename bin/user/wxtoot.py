@@ -35,10 +35,23 @@ entered into weewx.conf at ....
         key_access_token = "Your access token"
         server_url_mastodon = "The mastodon url"
 
-toots look something like this:
+after that, the rest is optional
+
+'simple' toots look something like this:
 
 STATION_IDENTIFIER: Ws: 0.0; Wd: -; Wg: 1.1; oT: 7.00;
                     oH: 97.00; P: 1025.307; R: 0.000
+
+'full' toots (the default) look like this:
+
+STATION_IDENTIFIER:
+ Winddir: N
+ Windgust: 4.9 mps
+ outTemp: 38.4 C
+ outHumidity: 41.95 %
+ Pressure: 1014.587 mbar
+ Rain: 0.000 mm
+ Date Time: 27 Dec 2022 18:06
 
 The STATION_IDENTIFIER is the first part of the station 'location' defined in
 weewx.conf.  To specify a different identifier for tweets, use the 'station'
@@ -48,11 +61,33 @@ parameter.  For example:
     [[Mastodon]]
         station = hal
 
-The 'format' parameter determines the tweet contents.  The default format is:
+The 'format' parameter determines the tweet contents.
+
+Besides specifying a format, there are 3 coded options to choose from
+[StdRESTful]
+    [[Mastodon]]
+        format_choice = full  # simple , full, template
+The 'full' format is:
+
+format = '{station:%s} ' \
+         '\n Windspeed: {windSpeed:%.1f} ' \
+         '\n Winddir: {windDir:%03.0f} ' \
+         '\n Windgust: {windGust:%.1f} ' \
+         '\n outTemp: {outTemp:%.1f} ' \
+         '\n outHumidity: {outHumidity:%.2f} ' \
+         '\n Pressure: {barometer:%.3f} ' \
+         '\n Rain: {rain:%.3f} ' \
+         '\n Date Time: {dateTime:%d %b %Y %H:%M}'
+
+The 'simple' format is:
 
 format = {station:%.8s}: Ws: {windSpeed:%.1f}; Wd: {windDir:%03.0f};
          Wg: {windGust:%.1f}; oT: {outTemp:%.1f}; oH: {outHumidity:%.2f};
          P: {barometer:%.3f}; R: {rain:%.3f}
+
+The 'template' option allows the user to take full control of the layout in
+the format of a weewx style template.
+See the template directory and notes written there.
 
 To specify a different tweet message, use the format parameter.  For example,
 this would tweet only wind information:
@@ -75,15 +110,6 @@ The dateTime field is handled slightly differently.  For example:
     ts: {dateTime:%X}           ->  ts: 16:07:50 22 Oct 2014
     ts: {dateTime:%H:%M:%S}     ->  ts: 16:07:50
 
-By default, the units are those specified by the unit system in the
-StdConvert section of weewx.conf.  To specify a different unit system,
-use the unit_system option:
-
-[StdRESTful]
-    [[Mastodon]]
-        unit_system = METRICWX
-
-Possible values include US, METRIC, or METRICWX.
 """
 
 try:
@@ -248,29 +274,22 @@ class Toot(weewx.restx.StdRESTbase):
         if site_dict is None:
             logerr("site_dict failed, is it complete? : %s" % site_dict)
             return
-        loginf("site_dict = %s" % site_dict)
-        loginf("config_dict = %s" % config_dict)
 
         # development only
         # visibility : options are ... public, unlisted, private, direct
         site_dict.setdefault('visibility', 'direct')
 
         # default the station name
-        site_dict.setdefault('station', engine.stn_info.location)
+        site_dict.setdefault('station', config_dict['Station']['location'])
 
-        # if a unit system was specified, get the weewx constant for it.
-        # do it here so a bogus unit system will cause weewx to die
-        # immediately, not simply cause the mastodon thread to crap out.
-        usn = site_dict.get('unit_system')
-        loginf("units are usn %s" % usn)
+        # FIXME potential case issue
+        usn = config_dict['StdReport']['Defaults']['unit_system']
         if usn is not None:
-            site_dict['unit_system'] = weewx.units.unit_constants[usn]
-            loginf('units will be converted to %s' % usn)
+            site_dict['unit_system'] = weewx.units.unit_constants[usn.upper()]
+            loginf('unit system is %s' % usn)
 
         site_dict.setdefault('format_ordinal', False)
         site_dict['format_ordinal'] = to_bool(site_dict.get('cardinal'))
-        # if site_dict['cardinal']:
-        #    site_dict.setdefault['format_ordinal'] = 'ord'
         if site_dict['format_choice'] == 'simple':
             site_dict.setdefault('format', self._DEFAULT_FORMAT_1)
         elif site_dict['format_choice'] == 'full':
@@ -325,16 +344,16 @@ class TootThread(weewx.restx.RESTThread):
                  post_interval=None, max_backlog=sys.maxsize, stale=None,
                  timeout=60, max_tries=3, retry_wait=5):
         super(TootThread, self).__init__(queue,
-                                             protocol_name='Mastodon',
-                                             manager_dict=None,
-                                             post_interval='3600',
-                                             max_backlog=max_backlog,
-                                             stale=stale,
-                                             log_success=log_success,
-                                             log_failure=log_failure,
-                                             max_tries=max_tries,
-                                             timeout=timeout,
-                                             retry_wait=retry_wait)
+                                         protocol_name='Mastodon',
+                                         manager_dict=None,
+                                         post_interval='3600',
+                                         max_backlog=max_backlog,
+                                         stale=stale,
+                                         log_success=log_success,
+                                         log_failure=log_failure,
+                                         max_tries=max_tries,
+                                         timeout=timeout,
+                                         retry_wait=retry_wait)
 
         self.mstdn = Mastodon(access_token=key_access_token,
                               api_base_url=server_url_mastodon)
@@ -359,6 +378,23 @@ class TootThread(weewx.restx.RESTThread):
             self.cardinal = 'deg'
 
     def format_toot(self, record):
+        # from mqtt.py
+        UNIT_REDUCTIONS = {
+            'degree_F': 'F',
+            'degree_C': 'C',
+            'inch': 'in',
+            'mile_per_hour': 'mph',
+            'mile_per_hour2': 'mph',
+            'km_per_hour': 'kph',
+            'km_per_hour2': 'kph',
+            'meter_per_second': 'mps',
+            'meter_per_second2': 'mps',
+            'degree_compass': None,
+            'watt_per_meter_squared': 'Wpm2',
+            'uv_index': None,
+            'percent': '%',
+            'unix_epoch': None,
+        }
         msg = self.format
         for obs in record:
             oldstr = None
@@ -366,15 +402,18 @@ class TootThread(weewx.restx.RESTThread):
             pattern = "{%s}" % obs
             m = re.search(pattern, msg)
             if m:
+                loginf("START pattern = %s in %s" % (pattern, msg))
                 oldstr = m.group(0)
+                loginf("  oldstr = %s" % oldstr)
             else:
                 pattern = "{%s:([^}]+)}" % obs
                 m = re.search(pattern, msg)
                 if m:
                     oldstr = m.group(0)
                     fmt = m.group(1)
-            # loginf("obs = %s" % obs)
+            loginf("obs = %s" % obs)
             if oldstr is not None:
+                abv_unit = ' '
                 if obs == 'dateTime':
                     if self.format_utc:
                         ts = time.gmtime(record[obs])
@@ -385,11 +424,17 @@ class TootThread(weewx.restx.RESTThread):
                     newstr = self.format_None
                 elif obs == 'windDir' and self.cardinal == 'ord':
                     newstr = (_dir_to_ord(record[obs], self.ordinals))
-                else:
+                elif obs == 'station':
                     newstr = fmt % record[obs]
-                msg = msg.replace(oldstr, newstr)
-        logdbg('msg: %s' % msg)
-        # loginf('info msg: %s' % msg)
+                else:
+                    (unit_type, _) = weewx.units.getStandardUnitType(
+                                                 self.unit_system, obs)
+                    abv_unit = UNIT_REDUCTIONS.get(unit_type, unit_type)
+                    newstr = fmt % record[obs]
+                    logdbg("Finish replace with oldstr %s : newstr %s" %
+                           (oldstr, newstr))
+                msg = msg.replace(oldstr, (newstr + ' ' + abv_unit))
+        logdbg('format msg: %s' % msg)
         return msg
 
     def process_record(self, record, dummy_manager):
@@ -400,7 +445,7 @@ class TootThread(weewx.restx.RESTThread):
         if self.format_choice == 'template' and self.template_file:
             with open(self.template_file, 'r') as f:
                 msg = f.read()
-                msg = "msg from template:" + msg.replace("\\n", "\n")
+                msg = msg.replace("\\n", "\n")
         else:
             msg = self.format_toot(record)
 
@@ -432,39 +477,44 @@ class TootThread(weewx.restx.RESTThread):
                     with open(img_0, 'wb') as f:
                         shutil.copyfileobj(image.raw, f)
                     our_images.append(img_0)
-                    loginf("Image server saved: %s with %s " % (img_0, image))
+                    logdbg("Image server saved: %s with %s " % (img_0, image))
 
                 # fetch images from the local file system
                 if self.image_directory:
                     self.allow_ext = '.png'
-                    for imgs in glob.iglob(f'{self.image_directory}/*'):
-                        if (imgs == img_0):
-                            continue
-                        if (imgs.endswith(".png")) or (imgs.endswith(".jpg")):
-                            our_images.append(imgs)
-                        elif (imgs.endswith(".gif")) or (imgs.endswith(".webp")):
-                            our_images.append(imgs)
-                    # but there can be only 1^H 4
-                    our_images = our_images[:4]
+                    try:
+                        for imgs in glob.iglob(f'{self.image_directory}/*'):
+                            if (imgs == img_0):
+                                continue
+                            if (imgs.endswith(".png")) or \
+                               (imgs.endswith(".jpg")):
+                                our_images.append(imgs)
+                            elif (imgs.endswith(".gif")) or \
+                                 (imgs.endswith(".webp")):
+                                our_images.append(imgs)
+                        # but there can be only 1^H 4
+                        our_images = our_images[:4]
+                    except FileNotFoundError as err:
+                        logerr("Error accessing file: %s" % err)
 
-                loginf("length of our_images %s " % len(our_images))
-                loginf("our images %s" % our_images)
+                logdbg("length of our_images %s " % len(our_images))
+                logdbg("our images %s" % our_images)
 
             except Exception as e:
-                logerr("2nd except is %s" % e)
+                logerr("local except is %s" % e)
                 raise weewx.restx.FailedPost("local images failed: %s" % e)
 
             # Mastodon.media_post
-            loginf("length of our_images is %s" % len(our_images))
+            logdbg("length of our_images is %s" % len(our_images))
             if len(our_images) != 0:
                 media_list = []
                 for media in range(len(our_images)):
-                    loginf("media is %s" % our_images[media])
+                    logdbg("media is %s" % our_images[media])
                     media_id = self.mstdn.media_post(our_images[media])
                     media_list.append(media_id)
-                # loginf("our media_list images are %s : %s" % (media, media_list))
+                logdbg("our media_list images are %s : %s" % (media,
+                                                              media_list))
                 try:
-                    msg = "status_post with media: " + msg
                     self.mstdn.status_post(msg,
                                            media_ids=media_list,
                                            sensitive=False)
@@ -473,7 +523,6 @@ class TootThread(weewx.restx.RESTThread):
                     raise weewx.restx.FailedPost("media_post failed: %s" % e)
             else:
                 try:
-                    msg = "status_post: " + msg
                     self.mstdn.status_post(msg)
                     return
                 except Exception as e:

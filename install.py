@@ -18,14 +18,21 @@ from weecfg.extension import ExtensionInstaller
 wxtoot_config = """
     [StdRESTful]
         [[Mastodon]]
-        key_access_token = 'replace_me'  # your access_token
+        # from your account under preferences/development/application
+        key_access_token = 'replace_me'
         server_url_mastodon = 'replace_me'
-        format_choice = full  # simple , full, template
+        # simple , full, template
+        format_choice = full
+        # Mastodon will rate limit when excessive requests are made
         post_interval = 3600
+        # convert from numeric degrees to Cardinal points - true or false
         cardinal = true
-        server_url_image = ''  # complete if fetching images
-        image_directory = ''  # complete if uploading images
-        template_file =  'replace_me if using template'  # /var/www/html/weewx/DATA/mastodon.txt
+        # complete if fetching images via a webserver
+        server_url_image = ''
+        # complete if uploading images from a local directory
+        image_directory = ''
+        # example: /var/www/html/weewx/DATA/mastodon.txt
+        template_file =  'replace_me if using template'
 """
 
 wxtoot_dict = configobj.ConfigObj(StringIO(wxtoot_config))
@@ -45,5 +52,10 @@ class MstdnInstaller(ExtensionInstaller):
             author_email="glenn.mckechnie@gmail.com",
             restful_services='user.wxtoot.Toot',
             config=wxtoot_dict,
-            files=[('bin/user', ['bin/user/wxtoot.py'])]
+            files=[('bin/user', ['bin/user/wxtoot.py']),
+                   ('skins/Seasons/DATA',
+                   ['skins/Seasons/DATA/mastodon.txt.tmpl',
+                    'skins/Seasons/DATA/mastodon-skin.conf',
+                    ])
+                   ]
         )
