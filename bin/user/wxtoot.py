@@ -118,16 +118,17 @@ try:
 except ImportError:
     # Python 2
     import Queue as queue
+import os
 import re
 import sys
 import time
+import requests
+import shutil
+import glob
 import weewx
 import weewx.restx
 import weewx.units
 from weeutil.weeutil import to_bool
-import requests
-import shutil
-import glob
 from mastodon import Mastodon
 
 try:
@@ -308,6 +309,23 @@ class Toot(weewx.restx.StdRESTbase):
         if isinstance(binding, list):
             binding = ','.join(binding)
         loginf('binding is %s' % binding)
+        # run some prechecks, bail if not found
+        self.template_file = site_dict.get('template_file')
+        if self.template_file:
+            logdbg("template_file is %s" % self.template_file)
+            try:
+                with open(self.template_file, 'r') as f:
+                    pass
+            except FileNotFoundError as err:
+                logerr("Error accessing file: %s" % err)
+                return
+        self.image_directory = site_dict.get('image_directory')
+        if self.image_directory:
+            if os.path.isdir(self.image_directory):
+                pass
+            else:
+                logerr("Error accessing directory: %s" % self.image_directory)
+                return
 
         self.data_queue = queue.Queue()
         data_thread = TootThread(self.data_queue, **site_dict)
@@ -411,7 +429,6 @@ class TootThread(weewx.restx.RESTThread):
                 if m:
                     oldstr = m.group(0)
                     fmt = m.group(1)
-            loginf("obs = %s" % obs)
             if oldstr is not None:
                 abv_unit = ' '
                 if obs == 'dateTime':
@@ -482,20 +499,17 @@ class TootThread(weewx.restx.RESTThread):
                 # fetch images from the local file system
                 if self.image_directory:
                     self.allow_ext = '.png'
-                    try:
-                        for imgs in glob.iglob(f'{self.image_directory}/*'):
-                            if (imgs == img_0):
-                                continue
-                            if (imgs.endswith(".png")) or \
-                               (imgs.endswith(".jpg")):
-                                our_images.append(imgs)
-                            elif (imgs.endswith(".gif")) or \
-                                 (imgs.endswith(".webp")):
-                                our_images.append(imgs)
-                        # but there can be only 1^H 4
-                        our_images = our_images[:4]
-                    except FileNotFoundError as err:
-                        logerr("Error accessing file: %s" % err)
+                    for imgs in glob.iglob(f'{self.image_directory}/*'):
+                        if (imgs == img_0):
+                            continue
+                        if (imgs.endswith(".png")) or \
+                           (imgs.endswith(".jpg")):
+                            our_images.append(imgs)
+                        elif (imgs.endswith(".gif")) or \
+                             (imgs.endswith(".webp")):
+                            our_images.append(imgs)
+                    # but there can be only 1^H 4
+                    our_images = our_images[:4]
 
                 logdbg("length of our_images %s " % len(our_images))
                 logdbg("our images %s" % our_images)

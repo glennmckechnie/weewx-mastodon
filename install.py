@@ -32,7 +32,7 @@ wxtoot_config = """
         # complete if uploading images from a local directory
         image_directory = ''
         # example: /var/www/html/weewx/DATA/mastodon.txt
-        template_file =  'replace_me if using template'
+        template_file = '/var/www/html/weewx/DATA/mastodon.txt'
 """
 
 wxtoot_dict = configobj.ConfigObj(StringIO(wxtoot_config))
