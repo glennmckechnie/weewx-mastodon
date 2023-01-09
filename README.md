@@ -52,6 +52,8 @@ Revamped the template layout and added a link to the [Tag docs](https://weewx.co
 
 The template is the most flexible and configurable way to get your post format configured as you like. You incorporate the template into your default skin and edits to the template file can then be made without restarting weewx. Like all choices there is a learning curve involved and that documentation link will help - as will the included example. Change the contents to suit.
 
+Also - added bin/user/since.py as the example template uses it to display todays rain, since 9a.m. - which is of course configurable.
+
 
 **27th Dec 2022**
 
