@@ -1,1 +1,33 @@
-Temp: $current.outTemp\nHumidity: $current.outHumidity\nPressure: $current.barometer\nWind: $current.windDir.ordinal_compass\nWindspeed $current.windSpeed (avg), $current.windGust (gust)\nRain Rate: $current.rainRate Rain Total: $day.rain.sum\n \n http://example.com \n
+#errorCatcher Echo
+## Template file for providing data to weewx-mastodon
+## https://github.com/glennmckechnie/weewx-mastodon
+##
+## Tag information at...
+## https://weewx.com/docs/customizing.htm#Tags
+
+#if $trend.barometer.raw is not None
+      #set $_BAROM_TREND = $trend.barometer.hPa.raw
+  #if $_BAROM_TREND >= 2.0
+      #set $_BAROM_TREND_TXT = "Rising Rapidly"
+  #else if $_BAROM_TREND >= 0.7
+      #set $_BAROM_TREND_TXT = "Rising Slowly"
+  #else if $_BAROM_TREND <= -2.0
+      #set $_BAROM_TREND_TXT = "Falling Rapidly"
+  #else if $_BAROM_TREND <= -0.7
+      #set $_BAROM_TREND_TXT = "Falling Slowly"
+  #else
+      #set $_BAROM_TREND_TXT = "Steady"
+  #end if
+#else
+  #set $_BAROM_TREND_TXT = ""
+#end if
+
+#Weather summary for $current.dateTime.format("%d-%b-%Y %H:%M") at
+$station.location, Australia: \n
+Temp: (min: $day.outTemp.min) -- $current.outTemp -- (max: $day.outTemp.max)
+Humidity: (min: $day.outHumidity.min) -- $current.outHumidity -- (max: $day.outHumidity.max)
+Pressure: $current.barometer ( $_BAROM_TREND_TXT )
+Wind: $current.windDir.ordinal_compass ($current.windDir deg)
+     Windspeed $current.windSpeed (avg) : $current.windGust (gust)
+Rain Rate: $current.rainRate : Rain Total (since 9am) : $since($hour=9).rain.sum \n
+More info via weewx at http://weather.cgm.id.au/weewx/ \n

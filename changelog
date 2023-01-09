@@ -1,3 +1,15 @@
+0.03 9 Jan 2023
+* Call this one a Beta version!
+* Add image selection by name
+* enhance template example
+* fix bug with comments in install.py (missing fields)
+* release with dev_mode switch for testing purposes
+* various sanity checks / tweaks
+
+
+0.02 27 Dec 2022
+* first release - Alpha
+
 0.01 21 Dec 2022
 * adapted to work with mastodon servers
 

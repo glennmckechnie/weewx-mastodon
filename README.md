@@ -27,6 +27,25 @@ This [weewx-user thread](https://groups.google.com/g/weewx-user/c/wo26pKJ9q9I/m/
 The base code is from the weewx twitter extension. So if you've used that, then this will be very familiar in its setup.
 
 ----
+**9th Jan 2023**
+
+version V0.3
+
+Move from Alpha to Beta!
+This should 'work out of the box'. Tweaking options will shape the output to your taste, but you should get something uploaded after configuring and starting it
+
+Added the ability to specify individual images, not just the path to select possible images.
+
+Reworked the weewx.conf options. Once the key_access_token and server_url_mastodon are completed correctly you should get a result uploaded to your server.
+
+The script has a dev_mode (dev_mode = True) switch where it will post every minute; but it will do it in private mode. That switch sets verbose debug info and pollutes the mastodon space just as it does your logs. That's why it's named dev(eloper )mode. It's useful for testing and if you do use it, when you turn it off you'll default back to every hour and posts will revert to the default unlisted mode (as req'd by the mastodon instance it was developed on).
+Both those values can be overridden under [Mastodon] in weewx.conf - post_interval (seconds - default is 3600) and visibility (default is unlisted; others are, public, unlisted, private, direct)
+
+Revamped the template layout and added a link to the [Tag docs](https://weewx.com/docs/customizing.htm#Tags)
+
+The template is the most flexible and configurable way to get your post format configured as you like. You incorporate the template into your default skin and edits to the template file can then be made without restarting weewx. Like all choices there is a learning curve involved and that documentation link will help - as will the included example. Change the contents to suit.
+
+
 **27th Dec 2022**
 
 version V0.2
@@ -67,6 +86,7 @@ That source is at https://github.com/halcy/Mastodon.py
 2) run the installer:
 
 <pre>wee_extension --install weewx-mastodon.zip</pre>
+this installs it as extension *wxtoot*
 
 3) install the prerequisite
 
@@ -105,6 +125,10 @@ Refining that initial configuration is then your choice.
 sudo /etc/init.d/weewx stop
 sudo /etc/init.d/weewx start
 </pre>
+
+7) To uninstall
+
+  wee_extension --uninstall wxtoot
 
 ----
 
