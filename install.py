@@ -33,6 +33,7 @@ wxtoot_config = """
         #images = ''
         # example: /var/www/html/weewx/DATA/mastodon.txt
         #template_file = '/var/www/html/weewx/DATA/mastodon.txt'
+        #template_last_file = '/var/www/html/weewx/DATA/mastsummary.txt'
         # post formats - simple, full, template
         format_choice = full
         # must finish with a valid entry as the last entry cannot be a comment
