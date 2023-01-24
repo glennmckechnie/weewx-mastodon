@@ -174,7 +174,7 @@ except ImportError:
         logmsg(syslog.LOG_ERR, msg)
 
 
-VERSION = "0.03"
+VERSION = "0.04"
 
 if weewx.__version__ < "3":
     raise weewx.UnsupportedFeature("weewx 3 is required, found %s" %
@@ -308,6 +308,7 @@ class Toot(weewx.restx.StdRESTbase):
         site_dict.setdefault('image_directory', '')
         site_dict.setdefault('images', '')
         site_dict.setdefault('template_file', '')
+        site_dict.setdefault('template_last_file', '')
         site_dict.setdefault('format_None', self._DEFAULT_FORMAT_NONE)
         site_dict.setdefault('format_utc', False)
         site_dict['format_utc'] = to_bool(site_dict.get('format_utc'))
@@ -343,14 +344,23 @@ class Toot(weewx.restx.StdRESTbase):
             binding = ','.join(binding)
         loginf('binding is %s' % binding)
 
-        # run some prechecks, exit if not found
+        # run some prechecks
+        # FIXME - probably too early, but they will be generated if allowed to
+        # continue - unless user intervention is truly required
+        """
         self.template_file = site_dict.get('template_file')
         if self.template_file:
             if self.dev_mode:
                 loginf("template_file is %s" % self.template_file)
             if not os.path.isfile(self.template_file):
-                logerr("Missing File? %s" % self.template_file)
-                return
+                logerr("Missing file? %s" % self.template_file)
+        self.templatesum_file = site_dict.get('template_last_file')
+        if self.templatesum_file:
+            if self.dev_mode:
+                loginf("templatesum_file is %s" % self.templatesum_file)
+            if not os.path.isfile(self.templatesum_file):
+                logerr("Missing summary file? %s" % self.templatesum_file)
+        """
         self.image_directory = site_dict.get('image_directory')
         if self.image_directory:
             if os.path.isdir(self.image_directory):
@@ -385,9 +395,10 @@ class Toot(weewx.restx.StdRESTbase):
 
 class TootThread(weewx.restx.RESTThread):
     def __init__(self, queue, images, dev_mode, server_url_image,
-                 image_directory, template_file, key_access_token,
-                 server_url_mastodon, visibility, cardinal, format_choice,
-                 station, format, format_None, ordinals, post_interval,
+                 image_directory, template_file, template_last_file,
+                 key_access_token, server_url_mastodon, visibility,
+                 cardinal, format_choice, station, format, format_None,
+                 ordinals, post_interval,
                  format_utc=True, format_ordinal=True,
                  unit_system=None, skip_upload=False,
                  log_success=True, log_failure=True,
@@ -431,6 +442,7 @@ class TootThread(weewx.restx.RESTThread):
             self.images = images
 
         self.template_file = template_file
+        self.templatesum_file = template_last_file
         self.station = station
         self.format_choice = format_choice
         self.format = format
@@ -441,6 +453,9 @@ class TootThread(weewx.restx.RESTThread):
         self.format_ordinal = format_ordinal
         self.unit_system = unit_system
         self.skip_upload = to_bool(skip_upload)
+        # time (24 hours) to post yesterdays summary. Assumed to be 9 to match
+        # since.py rain offset.
+        self.summary_time = int(9)
 
         if self.format_ordinal:
             # backwards compatability with twitter method
@@ -531,9 +546,26 @@ class TootThread(weewx.restx.RESTThread):
         record['station'] = self.station
 
         if self.format_choice == 'template' and self.template_file:
-            with open(self.template_file, 'r') as f:
-                msg = f.read()
-                msg = msg.replace("\\n", "\n")
+            ts = time.localtime()
+            if ts.tm_hour == self.summary_time and self.templatesum_file:
+                try:
+                    with open(self.templatesum_file, 'r') as f:
+                        msg = f.read()
+                        msg = msg.replace("\\n", "\n")
+                except Exception as e:
+                    loginf("Skipping summary file, not found!")
+                    logdbg("MISSING %s continuing... %s" % (
+                            self.templatesum_file, e))
+                    msg = "Missing summary template file"
+            else:
+                try:
+                    with open(self.template_file, 'r') as f:
+                        msg = f.read()
+                        msg = msg.replace("\\n", "\n")
+                except Exception as e:
+                    logerr("MISSING %s continuing... %s" % (
+                            self.template_file, e))
+                    msg = "Missing template file"
         else:
             msg = self.format_toot(record)
 
@@ -542,6 +574,9 @@ class TootThread(weewx.restx.RESTThread):
             return
 
         # now do the posting
+        self.post_with_retries(msg)
+
+    def post_with_retries(self, msg):
         ntries = 0
         while ntries < self.max_tries:
             ntries += 1

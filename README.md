@@ -27,6 +27,23 @@ This [weewx-user thread](https://groups.google.com/g/weewx-user/c/wo26pKJ9q9I/m/
 The base code is from the weewx twitter extension. So if you've used that, then this will be very familiar in its setup.
 
 ----
+**24th Jan 2023**
+V0.04
+
+* Reworked some overzealous file checks.
+
+wxtoot.py relies on the StdRestful process of weewx. The template files are generated via the StdReport process. They occur at different times; in particular, restful comes before reports. Catch 22
+
+Therefore, when initially setting up the templates, they may be missing on the first pass of the StdRestful service (they are created after restx has finished). In this case wxtoot (Mastodon) will stop looking because it was told to (Ooops). A restart of weewx, after the template files are generated would (and did) remedy this silent (unless you really follow your logs) error but this wasn't particularly obvious.
+
+wxtoot will no longer bail out so quickly, it will carry on and take notes. It will continue to log the missing files but will also continue to run with the hope that it's only a temporary error. It will in fact toot a message noting they are missing but once remedied that noise will stop!
+
+* Added a second template to display a summary of yesterdays results -- mastsummary.txt.tmpl
+
+This template will replace the daily template on the 9 a.m. Mastodon posting. Images can still be posted but the text is limited to 500 characters so we just post the one message for this timeslot.
+
+
+----
 **9th Jan 2023**
 
 ![https://mastodon.au/@BroomfieldWeatherBot](https://github.com/glennmckechnie/weewx-mastodon/blob/main/weewx-mastodon-V0_03.png "weewx-mastodon bot output") 

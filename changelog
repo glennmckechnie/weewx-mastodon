@@ -1,3 +1,12 @@
+0.04 24 Jan 2023
+
+* Rejig the file error checking and allow the restful process to continue if a
+templates output is missing
+
+* include a 2nd template to display a summary for 'yesterday' - posting it at
+9 a.m. in place of the daily posting
+
+
 0.03 9 Jan 2023
 * Call this one a Beta version!
 * Add image selection by name

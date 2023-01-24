@@ -50,7 +50,7 @@ def loader():
 class MstdnInstaller(ExtensionInstaller):
     def __init__(self):
         super(MstdnInstaller, self).__init__(
-            version="0.03",
+            version="0.04",
             name='wxtoot',
             description='toot weather data',
             author="Glenn McKechnie",
@@ -63,6 +63,7 @@ class MstdnInstaller(ExtensionInstaller):
                      'bin/user/since.py']),
                    ('skins/Seasons/DATA',
                     ['skins/Seasons/DATA/mastodon.txt.tmpl',
+                     'skins/Seasons/DATA/mastsummary.txt.tmpl',
                      'skins/Seasons/DATA/mastodon-skin.conf',
                      ])
                    ]

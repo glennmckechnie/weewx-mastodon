@@ -1,0 +1,34 @@
+#errorCatcher Echo
+## Template file for providing Yesterdays (summary) data to weewx-mastodon
+## https://github.com/glennmckechnie/weewx-mastodon
+##
+## Tag information at...
+## https://weewx.com/docs/customizing.htm#Tags
+
+#if $trend.barometer.raw is not None
+      #set $_BAROM_TREND = $trend.barometer.hPa.raw
+  #if $_BAROM_TREND >= 2.0
+      #set $_BAROM_TREND_TXT = "Rising Rapidly"
+  #else if $_BAROM_TREND >= 0.7
+      #set $_BAROM_TREND_TXT = "Rising Slowly"
+  #else if $_BAROM_TREND <= -2.0
+      #set $_BAROM_TREND_TXT = "Falling Rapidly"
+  #else if $_BAROM_TREND <= -0.7
+      #set $_BAROM_TREND_TXT = "Falling Slowly"
+  #else
+      #set $_BAROM_TREND_TXT = "Steady"
+  #end if
+#else
+  #set $_BAROM_TREND_TXT = ""
+#end if
+
+Archive: Yesterdays weather ($yesterday.dateTime.format("%A %d-%b-%Y")) at
+$station.location: \n
+
+Temp: (min: $yesterday.outTemp.min at $yesterday.outTemp.mintime) (max: $yesterday.outTemp.max at $yesterday.outTemp.maxtime)
+Humidity: (min: $yesterday.outHumidity.min at $yesterday.outHumidity.mintime) (max: $yesterday.outHumidity.max at $yesterday.outHumidity.maxtime)
+Pressure: (min: $yesterday.barometer.min at $yesterday.barometer.mintime) (max: $yesterday.barometer.max at $yesterday.barometer.maxtime)
+Windspeed: $yesterday.windSpeed.avg : $yesterday.windGust.avg (gust)
+Rain Total (24 hrs since 9am yesterday) : $since($hour=23).rain.sum \n
+
+More info via #weewx at http://weather.cgm.id.au/weewx/ \n
