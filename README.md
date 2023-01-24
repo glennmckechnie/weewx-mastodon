@@ -28,15 +28,16 @@ The base code is from the weewx twitter extension. So if you've used that, then 
 
 ----
 **24th Jan 2023**
+
 V0.04
 
 * Reworked some overzealous file checks.
 
 wxtoot.py relies on the StdRestful process of weewx. The template files are generated via the StdReport process. They occur at different times; in particular, restful comes before reports. Catch 22
 
-Therefore, when initially setting up the templates, they may be missing on the first pass of the StdRestful service (they are created after restx has finished). In this case wxtoot (Mastodon) will stop looking because it was told to (Ooops). A restart of weewx, after the template files are generated would (and did) remedy this silent (unless you really follow your logs) error but this wasn't particularly obvious.
+Therefore, when initially setting up the templates, they may be missing on the first pass of the StdRestful service as they are created after restx has finished. In this case wxtoot (Mastodon) will stop looking because it was told to -- Ooops. A restart of weewx, after the template files are generated would remedy this silent (unless you really follow your logs) error but this wasn't particularly obvious.
 
-wxtoot will no longer bail out so quickly, it will carry on and take notes. It will continue to log the missing files but will also continue to run with the hope that it's only a temporary error. It will in fact toot a message noting they are missing but once remedied that noise will stop!
+wxtoot will no longer bail out so quickly, it will now carry on and take more notes. It will continue to log the missing files but will also continue to run with the hope that it's only a temporary error. It will in fact toot a message noting they are missing but once the missing are found, that noise will stop.
 
 * Added a second template to display a summary of yesterdays results -- mastsummary.txt.tmpl
 
