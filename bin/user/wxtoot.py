@@ -545,29 +545,40 @@ class TootThread(weewx.restx.RESTThread):
             record = weewx.units.to_std_system(record, self.unit_system)
         record['station'] = self.station
 
-        if self.format_choice == 'template' and self.template_file:
-            ts = time.localtime()
-            if ts.tm_hour == self.summary_time and self.templatesum_file:
-                try:
-                    with open(self.templatesum_file, 'r') as f:
-                        msg = f.read()
-                        msg = msg.replace("\\n", "\n")
-                except Exception as e:
-                    loginf("Skipping summary file, not found!")
-                    logdbg("MISSING %s continuing... %s" % (
-                            self.templatesum_file, e))
-                    msg = "Missing summary template file"
+        # N.B. This addition will only work if post_interval is set to 60 secs;
+        # unless you fluke the ts.tm.min condition of 0 !
+        # It also requires 'post_interval = 60' to be set under the [Mastodon]
+        # section in weewx.conf
+
+        ts = time.localtime()
+        #-#loginf(" ts hour is %s & ts min is %s" % (ts.tm_hour, ts.tm_min))
+        if ts.tm_hour in (6,9,12,15,18) and ts.tm_min == 0:
+            #-#loginf("Accepted ts hour is %s & ts min is %s" % (ts.tm_hour, ts.tm_min))
+            if self.format_choice == 'template' and self.template_file:
+                if ts.tm_hour == self.summary_time and self.templatesum_file:
+                    try:
+                        with open(self.templatesum_file, 'r') as f:
+                            msg = f.read()
+                            msg = msg.replace("\\n", "\n")
+                    except Exception as e:
+                        loginf("Skipping summary file, not found!")
+                        logdbg("MISSING %s continuing... %s" % (
+                                self.templatesum_file, e))
+                        msg = "Missing summary template file"
+                else:
+                    try:
+                        with open(self.template_file, 'r') as f:
+                            msg = f.read()
+                            msg = msg.replace("\\n", "\n")
+                    except Exception as e:
+                        logerr("MISSING %s continuing... %s" % (
+                                self.template_file, e))
+                        msg = "Missing template file"
             else:
-                try:
-                    with open(self.template_file, 'r') as f:
-                        msg = f.read()
-                        msg = msg.replace("\\n", "\n")
-                except Exception as e:
-                    logerr("MISSING %s continuing... %s" % (
-                            self.template_file, e))
-                    msg = "Missing template file"
+                msg = self.format_toot(record)
         else:
-            msg = self.format_toot(record)
+            #-#loginf("Rejected ts hour was %s & ts min is %s" % (ts.tm_hour, ts.tm_min))
+            return
 
         if self.skip_upload:
             loginf('skipping upload')
