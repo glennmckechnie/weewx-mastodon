@@ -28,9 +28,11 @@ wxtoot_config = """
         # complete if fetching images via a webserver
         #server_url_image = ''
         # complete if uploading images from a local directory
+        # enter the path to the images and the image list separately
         #image_directory = ''
-        # comma separated list of up to 4 images
-        #images = ''
+        # comma separated list of up to 4 images - no qoutes for multiple entries.
+        # eg:- images = daytempdew.png, dayrain.png, dayuv.png 
+        #images = 
         # example: /var/www/html/weewx/DATA/mastodon.txt
         #template_file = '/var/www/html/weewx/DATA/mastodon.txt'
         #template_last_file = '/var/www/html/weewx/DATA/mastsummary.txt'
