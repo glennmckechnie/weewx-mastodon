@@ -161,8 +161,12 @@ sudo /etc/init.d/weewx start
 </pre>
 
 7) To uninstall
+  
+      For weewx 5.x...
+      <pre>weectl extension uninstall wwxtoot</pre>
+      or the older 4,x versions use...
+      <pre>wee_extension --uninstall wxtoot</pre>
 
-  wee_extension --uninstall wxtoot
 
 ----
 
