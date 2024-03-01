@@ -112,8 +112,11 @@ That source is at https://github.com/halcy/Mastodon.py
 <pre>wget -O weewx-mastodon.zip https://github.com/glennmckechnie/weewx-mastodon/archive/refs/heads/main.zip</pre>
 
 2) run the installer:
-
-<pre>wee_extension --install weewx-mastodon.zip</pre>
+   
+      For weewx 5.x...
+      <pre>weectl extension install weewx-mastodon.zip</pre>
+      or the older 4,x versions use...
+      <pre>wee_extension --install weewx-mastodon.zip</pre>
 
 this installs it as extension *wxtoot*
 
