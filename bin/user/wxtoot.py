@@ -18,7 +18,7 @@ The default post_interval is 3600 seconds (1 hour). You can change it.
 
 You can make it longer (more resources for other users) or make it less (fewer
 resources...) Keep in mind the bot is posting constantly, no sleep, no rest, no
-lull. It's a compromise and the aim is to avoid the Tragedy of the commons.
+lull. It's a compromise and the aim is to avoid the Tragedy of the Commons.
 
 toot weather data
 
@@ -32,12 +32,18 @@ Open the Preferences link on the accounts home page, scroll down to the
 The page will be headed Your Applications. Here you will create a new
 Application dedicated to weewx-posting.
 
-Click 'New Application' and complete the required fields  You can accept the
-defaults but you only need 'write' access. Upon completion , Save it and then
-reopen it and copy "Your access token".
+Click 'New Application' and complete the required fields.
 
-You need two things:  that access_token, and the mastodon_url and they will be
-entered into weewx.conf at ....
+For Application name you can type
+   weewx-mastodon
+For Application website you can type
+   https://github.com/glennmckechnie/weewx-mastodon
+
+You can accept the next set of defaults but you only need 'write' access.
+Upon completion, Click "Save Changes" and then reopen it and copy "Your access token".
+
+You need two things:  that access_token, and the mastodon_url and you will
+enter them into weewx.conf at ....
 
 [StdRESTful]
     [[Mastodon]]
@@ -45,6 +51,9 @@ entered into weewx.conf at ....
         server_url_mastodon = "The mastodon url"
 
 after that, the rest is optional
+
+A user agent string is now (july 2024) included within the code for those
+instances that require one.
 
 'simple' toots look something like this:
 
@@ -317,6 +326,7 @@ class Toot(weewx.restx.StdRESTbase):
         site_dict.setdefault('dev_mode', False)
         site_dict['dev_mode'] = to_bool(site_dict.get('dev_mode'))
         self.dev_mode = site_dict['dev_mode']
+        site_dict.setdefault('our_useragent', ("wxtoot/{} (https://github.com/glennmckechnie/weewx-mastodon)".format(VERSION)))
 
         # The site_dict values are obfuscated when using wee_debug
         # This is only for posting log extracts - better safe than sorry!
@@ -398,7 +408,7 @@ class TootThread(weewx.restx.RESTThread):
                  image_directory, template_file, template_last_file,
                  key_access_token, server_url_mastodon, visibility,
                  cardinal, format_choice, station, format, format_None,
-                 ordinals, post_interval,
+                 ordinals, post_interval, our_useragent,
                  format_utc=True, format_ordinal=True,
                  unit_system=None, skip_upload=False,
                  log_success=True, log_failure=True,
@@ -417,7 +427,8 @@ class TootThread(weewx.restx.RESTThread):
                                          retry_wait=retry_wait)
 
         self.mstdn = Mastodon(access_token=key_access_token,
-                              api_base_url=server_url_mastodon)
+                              api_base_url=server_url_mastodon,
+                              user_agent=our_useragent )
 
         self.image_server = server_url_image
         self.image_directory = image_directory
